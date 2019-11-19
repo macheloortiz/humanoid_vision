@@ -5,6 +5,7 @@ from transformations import *
 import os
 from os import listdir
 from os.path import isfile, join
+from find_enemy import find_enemy
 
 
 def get_pixel_coords(f, p, width, height):
@@ -59,7 +60,9 @@ def locate(img, ring_radius=75, camera_height=40, camera_target_distance=120, fo
     :param save_result: Boolean for saving the image with detected circle overlaid
     :return:    -the distance to the center of the dohyo
                 -the horizontal angle (0-towards the center, 90-center is 90 degrees to the right, 180-away from the center)
+                -the angle to enemy (0-ahead, 90-center is 90 degrees to the right, 180-away from the center)
                 -the warped image
+                -the circle info
     """
     camera_angle = math.pi - math.atan2(camera_target_distance, camera_height)
     fov = np.deg2rad(fov_angle/2)
@@ -124,7 +127,7 @@ def locate(img, ring_radius=75, camera_height=40, camera_target_distance=120, fo
     circle = find_best_circle(processed, ring_radius*px_per_cm)
     circle = np.uint16(np.around(circle))
 
-    detected = warped
+    detected = np.array(warped)
     cv2.circle(detected,(circle[0],circle[1]),circle[2],(0,255,0),2)
     cv2.circle(detected,(circle[0],circle[1]),1,(0,0,255),3)
 
@@ -134,12 +137,18 @@ def locate(img, ring_radius=75, camera_height=40, camera_target_distance=120, fo
     camera_position = np.array([center_width, center_height+camera_target_distance*px_per_cm])
     camera2center = np.array([circle[0], circle[1]]) - camera_position
     distance = np.linalg.norm(camera2center)
-    angle = math.atan2(camera2center[0], camera2center[1])
-    return distance, angle, warped
+    angle = math.atan2(camera2center[0], -camera2center[1])
 
+    x, y = find_enemy(warped, circle)
+    enemy_angle = None
+    if (x,y) != (0,0):
+        enemy_pos = np.array([x, y])
+        camera2enemy = enemy_pos-camera_position
+        enemy_angle = math.atan2(camera2enemy[0], -camera2enemy[1])
+    return distance, angle, enemy_angle, warped, circle
 
 
 if __name__ == '__main__':
-    img = cv2.imread('images/1.jpg')
-    distance, angle, warped = locate(img)
-    print('kupa')
+    img = cv2.imread('images/8.jpg')
+    distance, angle, angle_enemy, warped, circle = locate(img)
+    pass

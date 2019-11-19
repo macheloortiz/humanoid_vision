@@ -25,3 +25,10 @@ def translation(vector):
                      [0,1,0,vector[1]],
                      [0,0,1,vector[2]],
                      [0,0,0,1]])
+
+def normalize(img):
+    img = np.array(img, dtype='float32')
+    img -= img.min()
+    img *= 255/img.max()
+    img = np.array(img, dtype='uint8')
+    return img
