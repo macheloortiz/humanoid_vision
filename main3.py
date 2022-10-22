@@ -1,22 +1,24 @@
+# import the necessary packages
 from picamera.array import PiRGBArray
 from picamera import PiCamera
 import time
-import numpy as np
 import cv2
-import math
-from transformations import *
+# initialize the camera and grab a reference to the raw camera capture
+camera = PiCamera()
+camera.resolution = (640, 480)
+camera.framerate = 32
+camera.rotation = 180
+rawCapture = PiRGBArray(camera, size=(640, 480))
+# allow the camera to warmup
+time.sleep(0.1)
 
-cap = cv2.VideoCapture(0)
-ret, img = cap.read()
-img = cv2.rotate(img, cv2.ROTATE_180)
-#img = cv2.imread('dojiotest2.jpg') 
- 
 camera_height = 20
 camera_target_distance = 30
 camera_angle = math.pi - math.atan2(camera_target_distance, camera_height)
-fov = np.deg2rad(60 / 2)
+
+
 width = 640
-height = 480
+height = 460
 f = width / 2 / math.tan(fov)
 
 a = 10
@@ -41,34 +43,36 @@ def get_pixel_coords(f, p, width, height):
     return np.array([-f / p[2] * p[0] + width / 2, f / p[2] * p[1] + height / 2, 0, 1])
 
 
-p1_i = get_pixel_coords(f, p1_c, width, height)
-p2_i = get_pixel_coords(f, p2_c, width, height)
-p3_i = get_pixel_coords(f, p3_c, width, height)
+p1_i = get_pixel_coords(f, p1_c, width, height)  
 p4_i = get_pixel_coords(f, p4_c, width, height)
 
-while True:
-    img2 = cv2.circle(img, (int(p1_i[0]), int(p1_i[1])), 10, (0, 0, 0))
-    img2 = cv2.circle(img2, (int(p2_i[0]), int(p2_i[1])), 10, (100, 100, 100))
-    img2 = cv2.circle(img2, (int(p3_i[0]), int(p3_i[1])), 10, (0, 0, 0))
-    img2 = cv2.circle(img2, (int(p4_i[0]), int(p4_i[1])), 10, (255, 255, 255))
+img2 = cv2.circle(img, (int(p1_i[0]), int(p1_i[1])), 10, (0, 0, 0))
+img2 = cv2.circle(img2, (int(p2_i[0]), int(p2_i[1])), 10, (100, 100, 100))
+img2 = cv2.circle(img2, (int(p3_i[0]), int(p3_i[1])), 10, (0, 0, 0))
+img2 = cv2.circle(img2, (int(p4_i[0]), int(p4_i[1])), 10, (255, 255, 255))
 
-    src_pts = np.array([[p1_i[0], p1_i[1]],
-                        [p2_i[0], p2_i[1]],
-                        [p3_i[0], p3_i[1]],
-                        [p4_i[0], p4_i[1]]], dtype="float32")
+src_pts = np.array([[p1_i[0], p1_i[1]],
+                    [p2_i[0], p2_i[1]],
+                    [p3_i[0], p3_i[1]],
+                    [p4_i[0], p4_i[1]]], dtype="float32")
 
-    px_per_cm = 2
-    rect_res = a * px_per_cm
-    center_width = int(ring_radious * 1.5 * px_per_cm)
-    center_height = int(ring_radious * 1.5 * px_per_cm)
-    dst_pts = np.array([[center_width + rect_res, center_height - rect_res],
-                        [center_width - rect_res, center_height - rect_res],
-                        [center_width - rect_res, center_height + rect_res],
-                        [center_width + rect_res, center_height + rect_res]], dtype="float32")
+px_per_cm = 2
+rect_res = a * px_per_cm
+center_width = int(ring_radious * 1.5 * px_per_cm)
+center_height = int(ring_radious * 1.5 * px_per_cm)
+dst_pts = np.array([[center_width + rect_res, center_height - rect_res],
+                    [center_width - rect_res, center_height - rect_res],
+                    [center_width - rect_res, center_height + rect_res],
+                    [center_width + rect_res, center_height + rect_res]], dtype="float32")
 
-    perspective_matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
+perspective_matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
+
+# capture frames from the camera
+for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
+    # grab the raw NumPy array representing the image, then initialize the timestamp
+    # and occupied/unoccupied text
+    image = frame.array
     warped = cv2.warpPerspective(img, perspective_matrix, (3 * ring_radious * px_per_cm, 3 * ring_radious * px_per_cm))
-
     # mask = np.array(warped[:,:,0] == 0, dtype='uint8')
     # mask = cv2.trheshold(mask, 0.5)
     processed = cv2.medianBlur(warped, 5)
@@ -134,11 +138,11 @@ while True:
     cv2.imshow('warped', warped)
     #cv2.imshow('phase', normalize(phase))
     #cv2.imshow('laplacian', normalize(laplacian))
-
-    k = cv2.waitKey(30) & 0xff
-    if k == 27:
+    # show the frame
+    key = cv2.waitKey(1) & 0xFF
+    # clear the stream in preparation for the next frame
+    rawCapture.truncate(0)
+    # if the `q` key was pressed, break from the loop
+    if key == ord("q"):
         break
-
-cap.release()
 cv2.destroyAllWindows()
-print(camera_angle)

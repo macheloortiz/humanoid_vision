@@ -47,8 +47,62 @@ def find_best_circle(img, radius):
         return None
     return circles[0,0]
 
+a = 10
+ring_radius=50
+camera_height = 20
+camera_target_distance = 30
+fov_angle=60
+camera_angle = math.pi - math.atan2(camera_target_distance, camera_height)
+fov = np.deg2rad(fov_angle/2)
+width = 640
+height = 480
 
-def locate(img, ring_radius=75, camera_height=40, camera_target_distance=120, fov_angle=60, save_result=False):
+#width = np.shape(img)[1]
+#height = np.shape(img)[0]
+
+# Calculating the focal length
+f = width/2 / math.tan(fov)
+
+# points p1-p4 are vertices of a virtual 2a x 2a square lying on the ground
+a = 10
+p1 = np.array([-a, camera_target_distance+a, 0, 1])
+p2 = np.array([a, camera_target_distance+a, 0, 1])
+p3 = np.array([a, camera_target_distance-a, 0, 1])
+p4 = np.array([-a, camera_target_distance-a, 0, 1])
+# Calculating the transformation matrix for the camera
+camera_transformation = translation(np.array([0, 0, camera_height, 0])).dot(rotation_x(-camera_angle))
+# Inverting the camera transformation matrix
+inv_cam_trans = np.linalg.inv(camera_transformation)
+# Calculating the position of the square vertices relative to the camera
+p1_c = inv_cam_trans.dot(p1)
+p2_c = inv_cam_trans.dot(p2)
+p3_c = inv_cam_trans.dot(p3)
+p4_c = inv_cam_trans.dot(p4)
+
+# Finding the position of the virtual square in the picture
+p1_i = get_pixel_coords(f, p1_c, width, height)
+p2_i = get_pixel_coords(f, p2_c, width, height)
+p3_i = get_pixel_coords(f, p3_c, width, height)
+p4_i = get_pixel_coords(f, p4_c, width, height)
+
+src_pts = np.array([[p1_i[0], p1_i[1]],
+                  [p2_i[0], p2_i[1]],
+                  [p3_i[0], p3_i[1]],
+                  [p4_i[0], p4_i[1]]], dtype="float32")
+
+    # Warpingthe perspective
+px_per_cm = 2
+rect_res = a*px_per_cm
+center_width = int(ring_radius*1.5*px_per_cm)
+center_height = int(ring_radius*1.5*px_per_cm)
+dst_pts = np.array([[center_width + rect_res, center_height - rect_res],
+                  [center_width - rect_res, center_height - rect_res],
+                  [center_width - rect_res, center_height + rect_res],
+                  [center_width + rect_res, center_height + rect_res]], dtype="float32")
+
+perspective_matrix = cv2.getPerspectiveTransform(src_pts,dst_pts)
+
+def locate(img,save_result=False):
     """
     Function that detects the edge of dohyo and returns the distance to its center
     :param img: source image
@@ -64,59 +118,10 @@ def locate(img, ring_radius=75, camera_height=40, camera_target_distance=120, fo
                 -the warped image
                 -the circle info
     """
-    camera_angle = math.pi - math.atan2(camera_target_distance, camera_height)
-    fov = np.deg2rad(fov_angle/2)
-    # width = 640
-    # height = 480
-
-    width = np.shape(img)[1]
-    height = np.shape(img)[0]
-
-    # Calculating the focal length
-    f = width/2 / math.tan(fov)
-
-    # points p1-p4 are vertices of a virtual 2a x 2a square lying on the ground
-    a = 10
-    p1 = np.array([-a, camera_target_distance+a, 0, 1])
-    p2 = np.array([a, camera_target_distance+a, 0, 1])
-    p3 = np.array([a, camera_target_distance-a, 0, 1])
-    p4 = np.array([-a, camera_target_distance-a, 0, 1])
-    # Calculating the transformation matrix for the camera
-    camera_transformation = translation(np.array([0, 0, camera_height, 0])).dot(rotation_x(-camera_angle))
-    # Inverting the camera transformation matrix
-    inv_cam_trans = np.linalg.inv(camera_transformation)
-    # Calculating the position of the square vertices relative to the camera
-    p1_c = inv_cam_trans.dot(p1)
-    p2_c = inv_cam_trans.dot(p2)
-    p3_c = inv_cam_trans.dot(p3)
-    p4_c = inv_cam_trans.dot(p4)
-
-    # Finding the position of the virtual square in the picture
-    p1_i = get_pixel_coords(f, p1_c, width, height)
-    p2_i = get_pixel_coords(f, p2_c, width, height)
-    p3_i = get_pixel_coords(f, p3_c, width, height)
-    p4_i = get_pixel_coords(f, p4_c, width, height)
-
-    src_pts = np.array([[p1_i[0], p1_i[1]],
-                  [p2_i[0], p2_i[1]],
-                  [p3_i[0], p3_i[1]],
-                  [p4_i[0], p4_i[1]]], dtype="float32")
-
-    # Warpingthe perspective
-    px_per_cm = 1
-    rect_res = a*px_per_cm
-    center_width = int(ring_radius*1.5*px_per_cm)
-    center_height = int(ring_radius*1.5*px_per_cm)
-    dst_pts = np.array([[center_width + rect_res, center_height - rect_res],
-                  [center_width - rect_res, center_height - rect_res],
-                  [center_width - rect_res, center_height + rect_res],
-                  [center_width + rect_res, center_height + rect_res]], dtype="float32")
-
-    perspective_matrix = cv2.getPerspectiveTransform(src_pts,dst_pts)
-    warped = cv2.warpPerspective(img, perspective_matrix, (3*ring_radius*px_per_cm, 3*ring_radius*px_per_cm))
-
+    #warped = cv2.warpPerspective(img, perspective_matrix, (3*ring_radius*px_per_cm, 3*ring_radius*px_per_cm))
+    warped = img
     # Image processing (blurring and converting to gray)
-    processed = cv2.GaussianBlur(warped, (int(ring_radius/10), int(ring_radius/10)), cv2.BORDER_DEFAULT)
+    processed = cv2.medianBlur(img,5)
     processed = cv2.cvtColor(processed, cv2.COLOR_BGR2GRAY)
 
     # cv2.imshow('processed', processed)
@@ -134,18 +139,19 @@ def locate(img, ring_radius=75, camera_height=40, camera_target_distance=120, fo
     if save_result:
         cv2.imwrite(f'detected.png', detected)
 
-    camera_position = np.array([center_width, center_height+camera_target_distance*px_per_cm])
-    camera2center = np.array([circle[0], circle[1]]) - camera_position
-    distance = np.linalg.norm(camera2center)
-    angle = math.atan2(camera2center[0], -camera2center[1])
+    #camera_position = np.array([center_width, center_height+camera_target_distance*px_per_cm])
+    #camera2center = np.array([circle[0], circle[1]]) - camera_position
+    #distance = np.linalg.norm(camera2center)
+    #angle = math.atan2(camera2center[0], -camera2center[1])
 
-    x, y = find_enemy(warped, circle)
-    enemy_angle = None
-    if (x,y) != (0,0):
-        enemy_pos = np.array([x, y])
-        camera2enemy = enemy_pos-camera_position
-        enemy_angle = math.atan2(camera2enemy[0], -camera2enemy[1])
-    return distance, angle, enemy_angle, warped, circle
+    #x, y = find_enemy(warped, circle)
+    #enemy_angle = None
+    #if (x,y) != (0,0):
+        #enemy_pos = np.array([x, y])
+        #camera2enemy = enemy_pos-camera_position
+        #enemy_angle = math.atan2(camera2enemy[0], -camera2enemy[1])
+    #return distance, angle, enemy_angle, warped, circle
+    return circle    
 
 
 if __name__ == '__main__':

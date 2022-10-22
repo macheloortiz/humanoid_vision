@@ -3,7 +3,7 @@ import cv2
 import math
 from transformations import *
 # from locate import locate
-from matplotlib import pyplot as plt
+#from matplotlib import pyplot as plt
 
 def find_enemy(img, circle):
     radius = circle[2]
